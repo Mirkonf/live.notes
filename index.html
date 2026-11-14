@@ -30,10 +30,11 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .chip.s{background:var(--ac);color:#fff;border-color:var(--ac)}
 #ta{flex:1;resize:none;border:1px solid var(--bd);border-radius:14px;padding:16px;background:var(--sf);color:var(--tx);line-height:1.6;font-size:18px;min-height:0}
 #chips{display:flex;flex-wrap:wrap;gap:6px}
-#arch,#cf{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+#arch,#cf,#pv{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
 .row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px;background:var(--sf);border-radius:12px}
 .row div{min-width:0}
 @media(orientation:portrait){#ed{flex-direction:column}#right{padding:0 10px 10px;max-height:34%}}
+.sp{display:inline-block;width:16px;height:16px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:rt 1s linear infinite;vertical-align:-3px;margin-right:8px}@keyframes rt{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.sp{animation:none}}
 </style>
 </head>
 <body>
@@ -58,6 +59,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 
 <section id="arch" class="hide"></section>
 <section id="cf" class="hide"></section>
+<section id="pv" class="hide"></section>
 <section id="drv" class="card hide" style="margin:auto;width:min(520px,92%);display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:100%">
 <h2 style="margin:0">Google Drive</h2>
 <label class="st">Client ID OAuth<input id="cid" placeholder="xxxx.apps.googleusercontent.com" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg)"></label>
@@ -81,6 +83,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
    <p class="st">Parole degli ultimi 60 s (non salvate negli appunti):</p>
    <div id="chips"></div>
   </div>
+ <div class="card" style="display:flex;flex-direction:column;gap:8px"><button class="p" id="bOrg">✨ ORGANIZZA APPUNTI</button><button id="bVer">Versioni precedenti</button><span class="st">Elaborazione locale, senza AI né server. Mostra prima un'anteprima.</span></div>
  </aside>
 </section>
 </div>
@@ -123,32 +126,55 @@ const LessonManager={
 };
 
 /* ---------- RollingMemory ---------- */
-const STOP=new Set("che non per una con del della dei delle degli nel nella sono come più anche gli alle allo dal dalla questo questa quello essere ho ha hanno poi quindi ecco cioè però ma se si lo le la il un in di da al a e i o è mi ti ci vi sul sulla suo sua loro dunque allora molto quando dove perché".split(" "));
+const STOP=new Set("che non per una con del della dei delle degli nel nella sono più anche gli alle allo dal dalla questo questa quello essere ho ha hanno poi quindi ecco cioè però ma se si lo le la il un in di da al a e i o è mi ti ci vi sul sulla suo sua loro dunque allora molto perché".split(" "));
 const RollingMemory={
  items:[],
  add(text){
   const now=Date.now();
-  text.toLowerCase().split(/[^\p{L}\p{N}'’-]+/u).forEach(w=>{
-   w=w.replace(/^['’-]+|['’-]+$/g,"");
-   if(w.length>=3&&!STOP.has(w)&&!/^\d+$/.test(w))this.items.push({w,t:now});
+  text.split(/\s+/).forEach(raw=>{
+   const p=(raw.match(/[,;:.!?…]+$/)||[""])[0].slice(0,1);
+   const f=raw.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,"");
+   const w=f.toLowerCase();
+   if(w.length>=3&&!STOP.has(w)&&!/^\d+$/.test(w))this.items.push({w,f,p,t:now});
   });
  },
  prune(){const c=Date.now()-60000;this.items=this.items.filter(i=>i.t>=c)},
  stats(){
   this.prune();const m=new Map();
-  for(const i of this.items){const e=m.get(i.w)||{w:i.w,n:0,t:0};e.n++;e.t=Math.max(e.t,i.t);m.set(i.w,e)}
+  for(const i of this.items){const e=m.get(i.w)||{w:i.w,n:0,t:0};e.n++;if(i.t>=e.t){e.t=i.t;e.f=i.f;e.p=i.p}m.set(i.w,e)}
   return [...m.values()].sort((a,b)=>b.n-a.n||b.t-a.t);
  }
 };
 
 /* ---------- NotesEditor + SuggestionEngine ---------- */
+const Complete={
+ isL(c){return c!==undefined&&/[\p{L}\p{N}'’]/u.test(c)},
+ apply(text,a,b,form,p){
+  p=p||"";let s=a,e=b,left="";
+  if(a===b){
+   let i=a,j=a;
+   while(i>0&&this.isL(text[i-1]))i--;
+   while(j<text.length&&this.isL(text[j]))j++;
+   left=text.slice(i,a);
+   if(left&&form.toLowerCase().startsWith(left.toLowerCase())){s=i;e=j}
+  }
+  const before=text.slice(0,s);
+  if(s===e&&!left){const m=before.match(/([\p{L}\p{N}'’]+)[\s,;:.!?]*$/u);if(m&&m[1].toLowerCase()===form.toLowerCase())return{skip:true,text,pos:a}}
+  const up=!before.trim()||/[.!?…]\s*$/.test(before)||/\n\s*$/.test(before)||(left&&left[0]!==left[0].toLowerCase());
+  const f=up?form[0].toUpperCase()+form.slice(1):form;
+  const sp=s>0&&!/[\s(\[«“"'‘\-\/]/.test(text[s-1])?" ":"";
+  const n=text[e],aft=n!==undefined&&!/[\s,;:.!?)\]»”"]/.test(n)?" ":"";
+  const ins=sp+f+p+aft;
+  return{s,e,ins,pos:s+ins.length,text:text.slice(0,s)+ins+text.slice(e)};
+ }
+};
 const NotesEditor={
- insert(word,replaceLen){
-  const ta=$("ta");let s=ta.selectionStart,e=ta.selectionEnd;
-  if(replaceLen)s=e-replaceLen;
-  ta.setRangeText(word,s,e,"end");
+ insert(x){
+  const ta=$("ta"),r=Complete.apply(ta.value,ta.selectionStart,ta.selectionEnd,x.f,x.p);
   ta.focus({preventScroll:true});
-  LessonManager.dirty();
+  if(r.skip)return;
+  ta.setRangeText(r.ins,r.s,r.e,"end");
+  LessonManager.dirty();SuggestionEngine.refresh();Dash.soon();
  },
  lastWord(){
   const ta=$("ta");if(ta.selectionStart!==ta.selectionEnd)return"";
@@ -163,15 +189,12 @@ const SuggestionEngine={
   const box=$("sug");box.textContent="";
   this.list=p.length<2?[]:RollingMemory.stats().filter(x=>x.w.startsWith(p)&&x.w!==p).slice(0,5);
   this.list.forEach((x,i)=>{
-   const b=document.createElement("button");b.className="chip"+(i?"":" s");b.textContent=x.w;
+   const b=document.createElement("button");b.className="chip"+(i?"":" s");b.textContent=x.f;
    b.onmousedown=ev=>ev.preventDefault();
    b.onclick=()=>this.accept(i);box.appendChild(b);
   });
  },
- accept(i){
-  const x=this.list[i];if(!x)return;
-  NotesEditor.insert(x.w+" ",NotesEditor.lastWord().length);this.refresh();
- }
+ accept(i){const x=this.list[i];if(!x)return;NotesEditor.insert(x)}
 };
 
 /* ---------- SpeechRecognitionManager ---------- */
@@ -208,12 +231,17 @@ const Speech={
  ui(){$("bL").disabled=false;$("bS").disabled=true}
 };
 const Dash={
+ tm:null,
+ soon(){clearTimeout(this.tm);this.tm=setTimeout(()=>this.render(),150)},
  render(){
   const box=$("chips");box.textContent="";
-  RollingMemory.stats().slice(0,30).forEach(x=>{
-   const b=document.createElement("button");b.className="chip";b.textContent=x.w+(x.n>1?" ×"+x.n:"");
+  const p=NotesEditor.lastWord().toLowerCase(),all=RollingMemory.stats().slice(0,40);
+  const hit=p?all.filter(x=>x.w.startsWith(p)&&x.w!==p):[];
+  const rest=all.filter(x=>!hit.includes(x)).slice(0,30);
+  [...hit,...rest].forEach(x=>{
+   const b=document.createElement("button");b.className="chip"+(hit.includes(x)?" s":"");b.textContent=x.f+(x.n>1?" ×"+x.n:"");
    b.onmousedown=ev=>ev.preventDefault();
-   b.onclick=()=>NotesEditor.insert(x.w);
+   b.onclick=()=>NotesEditor.insert(x);
    box.appendChild(b);
   });
  }
@@ -225,7 +253,13 @@ const DocumentManager={
   if(!window.docx)throw new Error("Libreria Word non caricata: serve Internet");
   const {Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType}=window.docx;
   const meta=(k,v)=>new Paragraph({spacing:{after:60},children:[new TextRun({text:k+": ",bold:true,font:"Calibri",size:24}),new TextRun({text:v,font:"Calibri",size:24})]});
-  const body=l.text.split("\n").map(t=>new Paragraph({spacing:{after:120,line:300},children:[new TextRun({text:t,font:"Calibri",size:24})]}));
+  const runs=(t,o={})=>t.split("**").map((x,i)=>new TextRun({text:x,bold:i%2===1||o.bold,italics:o.italics,font:"Calibri",size:o.size||24}));
+  const body=l.text.split("\n").map(t=>{
+   if(/^#{1,3} /.test(t))return new Paragraph({heading:HeadingLevel.HEADING_3,spacing:{before:240,after:100},children:runs(t.replace(/^#+ /,""),{bold:true,size:28})});
+   if(/^[-*•] /.test(t))return new Paragraph({spacing:{after:60},indent:{left:360,hanging:240},children:runs("• "+t.slice(2))});
+   if(/^> /.test(t))return new Paragraph({spacing:{after:120},indent:{left:360},children:runs(t.slice(2),{italics:true})});
+   return new Paragraph({spacing:{after:120,line:300},children:runs(t)});
+  });
   const d=new Document({sections:[{children:[
    new Paragraph({children:[new TextRun({text:"LIVE NOTES",font:"Calibri",size:22,color:"6E6E73"})]}),
    new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{after:200},children:[new TextRun({text:l.topic.toUpperCase(),font:"Calibri",bold:true})]}),
@@ -378,7 +412,7 @@ let saveT=null;
 LessonManager.dirty=function(){
   $("sv").textContent="Modifiche non salvate…";clearTimeout(saveT);saveT=setTimeout(async()=>{await LessonManager.save();Sync.soon()},600);
 };
-function show(v){["start","arch","ed","cf","drv"].forEach(k=>$(k).classList.toggle("hide",k!==v));$("bExp").classList.toggle("hide",v!=="ed")}
+function show(v){["start","arch","ed","cf","drv","pv"].forEach(k=>$(k).classList.toggle("hide",k!==v));$("bExp").classList.toggle("hide",v!=="ed")}
 function openLesson(l){
   LessonManager.cur=l;$("ta").value=l.text;$("ttl").textContent=l.topic+" · "+l.subject;show("ed");$("ta").focus();
 }
@@ -408,6 +442,184 @@ async function renderArchive(){
   };
   q.oninput=draw;draw();
 }
+/* ---------- Organizzazione appunti (regole locali, nessuna AI) ---------- */
+function organizeNotes(src){
+ const st={rep:0,fix:0,punct:0,sections:0,defs:0,lists:0};
+ const STOPW=new Set("che non per una con del della dei delle degli nel nella sono come più anche gli alle allo dal dalla questo questa quello essere hanno poi quindi ecco però allora molto quando dove perché cosa sulla sulle tutti tutto tutte stato stati fatto fanno viene vengono avere dopo prima sopra sotto dunque quella quelli ancora sempre proprio quanto altro altri altre ogni solo stesso stessa questi queste così nostro nostra".split(" "));
+ const KEEP=new Set(["molto","più","meno","no","sì","ancora","via"]);
+ const STARTERS=new Set(["allora","quindi","poi","inoltre","infine","invece","però","dunque","adesso","ricordiamo","attenzione"]);
+ const ORD=new Set(["primo","terzo","quarto","quinto"]);
+ const SKIP=/^(del|dello|della|dei|degli|delle|di|il|lo|la|le|gli|i|un|uno|una|a)$/i,END=/^(il|lo|la|le|gli|i|un|una|è|sono|che|e|ma|poi|quindi|allora|dunque)$/i;
+ const TT=s=>{const ws=s.split(/\s+/),o=[];let i=0;while(i<ws.length&&SKIP.test(ws[i]))i++;for(;i<ws.length&&o.length<6;i++){const w=ws[i];if(END.test(w))break;o.push(w.replace(/[,.;:]+$/,""));if(/[,.;:]$/.test(w))break}return cap(o.join(" "))};
+ const MK=/^(?:(?:allora|dunque|bene|ok|oggi)\s+)*(passiamo (?:ora )?(?:a|al|allo|alla|ai|agli|alle)|parliamo (?:ora )?(?:di|del|dello|della|dei|degli|delle)|veniamo (?:a|al|alla)|argomento|nuovo argomento|prossimo argomento|cambiamo argomento|iniziamo con|vediamo oggi|oggi vediamo)\b[:,]?\s*/i;
+ const DEF=/^((?:(?:il|lo|la|le|gli|i|un|uno|una|l['’])\s?)?\p{L}[\p{L}'’ -]{2,40}?)\s+(è|sono|si chiama|si chiamano|si definisce|si dice|indica|rappresenta|significa|viene definit[oa]|è definit[oa])\s+(.{12,})$/iu;
+ const NOD=new Set(["oggi","ieri","domani","questo","questa","quello","quella","ecco","qui","adesso","allora","poi","che","se","non","ma","quando","perché","come","lui","lei","loro","io","noi","tu","voi","cosa","chi","dove"]);
+ const cs=(m,r)=>m[0]!==m[0].toLowerCase()?r[0].toUpperCase()+r.slice(1):r;
+ const fx=s=>s.replace(/perchè|poichè|affinchè|finchè/gi,m=>(st.fix++,cs(m,m.slice(0,-1).toLowerCase()+"é")))
+  .replace(/(^|[^\p{L}])(cioe|pò)(?![\p{L}])/giu,(m,a,w)=>(st.fix++,a+cs(w,w.toLowerCase()==="pò"?"po'":"cioè")))
+  .replace(/qual'è/gi,m=>(st.fix++,cs(m,"qual è")));
+ const W=s=>s.toLowerCase().match(/\p{L}[\p{L}'’]*/gu)||[];
+ const cap=s=>s.replace(/^(\P{L}*)(\p{L})/u,(m,a,b)=>a+b.toUpperCase());
+ const kws=s=>new Set(W(s).filter(w=>w.length>=5&&!STOPW.has(w)));
+ const fin=x=>{
+  if(/[.!?…:]$/.test(x))return x;
+  const ws=x.split(/\s+/);
+  if(ws.length<3||(/=/.test(x)&&ws[ws.length-1].length<=3))return x;
+  st.punct++;return x.replace(/[,;]$/,"")+".";
+ };
+ const comma=x=>x.replace(/(\p{L}) (ma|cioè|ovvero)(?![\p{L}])/gu,(m,a,w,o)=>x.slice(0,o).split(/\s+/).length>=3?(st.punct++,a+", "+w):m);
+ function sentences(t){
+  t=fx(t.replace(/[ \t]+/g," ").trim());
+  t=t.replace(/\s+([,;:.!?])/g,"$1").replace(/(\p{L})([,;:!?])(?=\p{L})/gu,"$1$2 ").replace(/(\p{Ll})\.(?=\p{Lu})/gu,"$1. ");
+  t=t.replace(/(^|[^\p{L}])((?:\p{L}+\s+){1,5}\p{L}+)\s+\2(?![\p{L}])/giu,(m,a,ph)=>(st.rep++,a+ph));
+  t=t.replace(/(^|[^\p{L}])(\p{L}{2,})(?:\s+\2)+(?![\p{L}])/giu,(m,a,w)=>KEEP.has(w.toLowerCase())?m:(st.rep++,a+w));
+  const parts=(t.replace(/(\d)\.(\d)/g,"$1\u0001$2").match(/[^.!?…]+[.!?…]*/g)||[]).map(x=>x.replace(/\u0001/g,".").trim()).filter(Boolean);
+  const res=[];
+  parts.forEach(p=>{
+   const ws=p.split(/\s+/);
+   if(/[.!?…]$/.test(p)||ws.length<14){res.push(p);return}
+   let cur=[];
+   ws.forEach((w,i)=>{
+    const lw=w.toLowerCase().replace(/[^\p{L}]/gu,""),two=(w+" "+(ws[i+1]||"")).toLowerCase();
+    const mkS=/^(passiamo (a|al|alla)|parliamo (di|del|della)|veniamo (a|al|alla))$/.test(two)||two==="la formula"||two==="ad esempio"||two==="per esempio";
+    const ordS=ORD.has(lw)||(lw==="secondo"&&ws.slice(0,i).some(x=>/^primo/i.test(x))&&!/^(al|del|nel|dal|il|lo|un|per|ogni|ad|di|a)$/i.test((ws[i-1]||"").toLowerCase()));
+    if((cur.length>=6&&(STARTERS.has(lw)||mkS))||(cur.length>=4&&ordS)){res.push(cur.join(" "));cur=[]}
+    cur.push(w);
+   });
+   res.push(cur.join(" "));
+  });
+  return res.map(x=>cap(fin(comma(x))));
+ }
+ const units=[];
+ src.replace(/\r/g,"").split(/\n[ \t]*\n/).forEach((b,bi)=>{
+  if(bi)units.push({br:1});
+  let buf=[];const flush=()=>{if(buf.length){sentences(buf.join(" ")).forEach(s=>units.push({s}));buf=[]}};
+  b.split("\n").forEach(line=>{const t=line.trim();if(!t)return;if(/^([-*•]|\d+[.)]|#+)\s/.test(t)){flush();units.push({raw:t})}else buf.push(t)});
+  flush();
+ });
+ const sn=units.filter(u=>u.s),K=sn.map(u=>kws(u.s));let k=0;
+ const secs=[];let cur={t:"",u:[]};
+ const pushSec=()=>{if(cur.u.length)secs.push(cur)};
+ units.forEach(u=>{
+  if(u.s){
+   const m=u.s.match(MK),n=cur.u.filter(x=>x.s).length;
+   const title=m?TT(u.s.slice(m[0].length)):"";
+   let split=!!(m&&n>=1);
+   if(!split&&n>=4){
+    const A=new Set(),B=new Set();
+    for(let j=Math.max(0,k-3);j<k;j++)K[j].forEach(x=>A.add(x));
+    for(let j=k;j<Math.min(K.length,k+3);j++)K[j].forEach(x=>B.add(x));
+    if(A.size>=3&&B.size>=3&&![...B].some(x=>A.has(x)))split=true;
+   }
+   if(split){pushSec();cur={t:m?title:"",u:[]}}else if(m&&!cur.t)cur.t=title;
+   k++;
+  }
+  cur.u.push(u);
+ });
+ pushSec();
+ const ST1=/^(primo|prima di tutto|innanzitutto|in primo luogo|per prima cosa)\b/i,CT=/^(secondo|terzo|quarto|quinto|in secondo luogo|in terzo luogo|poi|infine|inoltre|per ultimo)\b/i;
+ const STRIP=/^(primo|prima di tutto|innanzitutto|in primo luogo|per prima cosa|secondo|in secondo luogo|terzo|in terzo luogo|quarto|quinto|poi|infine|inoltre|per ultimo)\b[,:]?\s*/i;
+ secs.forEach(sc=>{const u=sc.u;for(let i=0;i<u.length;i++){if(u[i].s&&ST1.test(u[i].s)){let j=i+1;while(j<u.length&&u[j].s&&CT.test(u[j].s))j++;if(j-i>=2){for(let q=i;q<j;q++)u[q].n=q-i+1;i=j-1;st.lists++}}}});
+ const chunks=[];
+ secs.forEach(sc=>{
+  let title=sc.t;
+  if(!title&&secs.length>1){
+   const f=new Map();sc.u.forEach(x=>x.s&&[...kws(x.s)].forEach(w=>f.set(w,(f.get(w)||0)+1)));
+   const top=[...f.entries()].sort((a,b)=>b[1]-a[1]).slice(0,2).map(e=>e[0]);
+   if(top.length)title=cap(top.join(", "));
+  }
+  if(title){chunks.push("## "+title);st.sections++}
+  let para=[],rawb=[],lst=[];
+  const fp=()=>{if(para.length){chunks.push(para.join(" "));para=[]}},fr=()=>{if(rawb.length){chunks.push(rawb.join("\n"));rawb=[]}},fl=()=>{if(lst.length){chunks.push(lst.join("\n"));lst=[]}};
+  sc.u.forEach(x=>{
+   if(x.br){fp();fr();fl();return}
+   if(x.raw){fp();fl();rawb.push(x.raw);return}
+   fr();let s=x.s;
+   if(x.n){fp();lst.push(x.n+". "+(cap(s.replace(STRIP,""))||s));return}
+   fl();
+   if(/^(ad esempio|per esempio|esempio)\b/i.test(s)){fp();chunks.push("> "+s);return}
+   const cl=s.match(/^(.{8,120}?):\s*(.+)$/);
+   if(cl){const body=cl[2].replace(/\.$/,""),it=body.split(/,\s*|\s+e\s+/).map(z=>z.trim()).filter(Boolean);
+    if(it.length>=3&&it.every(z=>z.split(/\s+/).length<=5)&&!/[.!?]/.test(body)){fp();chunks.push(cl[1]+":\n"+it.map(z=>"- "+cap(z)).join("\n"));st.lists++;return}}
+   const d=MK.test(s)?null:s.match(DEF);
+   if(d){const tw=d[1].trim().split(/\s+/);if(tw.length<=4&&!NOD.has(tw[0].toLowerCase())&&tw.some(z=>z.length>=4)){s="**"+d[1].trim()+"** "+d[2]+" "+d[3];st.defs++}}
+   para.push(s);if(para.length>=5)fp();
+  });
+  fp();fr();fl();
+ });
+ const fq=new Map();
+ W(chunks.filter(c=>!c.startsWith("## ")).join(" ")).forEach(w=>{if(w.length>=6&&!STOPW.has(w))fq.set(w,(fq.get(w)||0)+1)});
+ [...fq.entries()].filter(e=>e[1]>=3).sort((a,b)=>b[1]-a[1]).slice(0,5).map(e=>e[0]).forEach(kw=>{
+  for(let i=0;i<chunks.length;i++){
+   const c=chunks[i];if(c.startsWith("## ")||c.startsWith("> "))continue;
+   const re=new RegExp("(^|[^\\p{L}*])("+kw.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")(?![\\p{L}*])","iu"),m=re.exec(c);
+   if(m){const idx=m.index+m[1].length;if((c.slice(0,idx).match(/\*\*/g)||[]).length%2===0){chunks[i]=c.slice(0,idx)+"**"+m[2]+"**"+c.slice(idx+m[2].length);return}}
+  }
+ });
+ const out=chunks.join("\n\n");
+ const f0=st.fix,base=W(fx(src));st.fix=f0;
+ const have=new Set(W(out));
+ const miss=[...new Set(base.filter(w=>w.length>=4))].filter(w=>!have.has(w));
+ return{text:out,st,miss};
+}
+function runOrganize(text){
+ return new Promise(res=>{
+  const local=()=>{try{res({ok:1,r:organizeNotes(text)})}catch(e){res({ok:0,e:e.message})}};
+  let w;
+  try{w=new Worker(URL.createObjectURL(new Blob(["self.onmessage=function(e){try{postMessage({ok:1,r:("+organizeNotes.toString()+")(e.data)})}catch(x){postMessage({ok:0,e:String(x.message)})}}"],{type:"text/javascript"})))}catch(e){setTimeout(local,30);return}
+  const t=setTimeout(()=>{w.terminate();local()},30000);
+  w.onmessage=e=>{clearTimeout(t);w.terminate();res(e.data)};
+  w.onerror=()=>{clearTimeout(t);w.terminate();local()};
+  w.postMessage(text);
+ });
+}
+function pvShell(t){show("pv");const c=$("pv");c.textContent="";const h=document.createElement("h2");h.style.margin="0";h.textContent=t;c.appendChild(h);return c}
+function mkBtn(t,f,pr){const b=document.createElement("button");b.textContent=t;if(pr)b.className="p";b.onclick=f;return b}
+function mkNote(c,t){const p=document.createElement("p");p.className="st";p.textContent=t;c.appendChild(p);return p}
+const backToEditor=()=>{show("ed");$("ta").focus()};
+async function organize(){
+ const l=LessonManager.cur;if(!l)return;
+ await LessonManager.save();
+ const snap=$("ta").value;
+ if(!snap.trim()){alert("Gli appunti sono vuoti.");return}
+ const c=pvShell("Organizza appunti");
+ const msg=mkNote(c,"");const sp=document.createElement("span");sp.className="sp";msg.append(sp,"Analisi degli appunti in corso… Elaborazione locale: nulla esce dall'app.");
+ const res=await runOrganize(snap);
+ if(!res.ok){msg.textContent="Elaborazione non riuscita ("+res.e+"). Gli appunti originali sono intatti.";c.appendChild(mkBtn("Torna agli appunti",backToEditor,1));return}
+ const r=res.r,s=r.st;
+ msg.textContent="Elaborazione terminata. Nulla è stato ancora modificato: controlla l'anteprima.";
+ mkNote(c,"Correzioni: "+s.fix+" · ripetizioni tolte: "+s.rep+" · punti/virgole aggiunti: "+s.punct+" · sezioni: "+s.sections+" · definizioni evidenziate: "+s.defs+" · elenchi: "+s.lists+(r.miss.length?" · parole non più presenti (controlla): "+r.miss.slice(0,15).join(", "):" · controllo fedeltà: nessuna parola persa"));
+ const g=document.createElement("div");g.style.cssText="display:flex;gap:10px;flex:1;min-height:220px";
+ const mk=(t,tx)=>{const d=document.createElement("div");d.style.cssText="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0";const b=document.createElement("strong");b.textContent=t;const a=document.createElement("textarea");a.readOnly=true;a.value=tx;a.style.cssText="flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--sf);color:var(--tx);font:inherit";d.append(b,a);return d};
+ g.append(mk("Originale",snap),mk("Riorganizzato",r.text));c.appendChild(g);
+ const bar=document.createElement("div");bar.style.cssText="display:flex;gap:8px;flex-wrap:wrap";
+ bar.append(mkBtn("Applica modifiche",async()=>{
+  if($("ta").value!==snap){msg.textContent="Gli appunti sono cambiati durante l'elaborazione: annulla e riprova.";return}
+  l.versions=(l.versions||[]).concat({t:Date.now(),text:snap,why:"Prima di «Organizza»"}).slice(-15);
+  $("ta").value=r.text;await LessonManager.save();Sync.soon();backToEditor();
+ },1),mkBtn("Annulla",backToEditor));
+ c.appendChild(bar);
+}
+function showVersions(){
+ const l=LessonManager.cur;if(!l)return;
+ const c=pvShell("Versioni precedenti");
+ const v=(l.versions||[]).slice().reverse();
+ if(!v.length)mkNote(c,"Nessuna versione salvata: ne viene creata una prima di ogni «Organizza».");
+ v.forEach(x=>{
+  const r=document.createElement("div");r.className="row";
+  const d=document.createElement("div");const a=document.createElement("strong");a.textContent=new Date(x.t).toLocaleString("it-IT")+" · "+x.why;
+  const b=document.createElement("div");b.className="st";b.textContent=x.text.slice(0,90).replace(/\n/g," ")+(x.text.length>90?"…":"");d.append(a,b);
+  r.append(d,mkBtn("Ripristina",async()=>{
+   if(!confirm("Ripristinare questa versione? Il testo attuale resterà tra le versioni."))return;
+   await LessonManager.save();
+   l.versions=(l.versions||[]).concat({t:Date.now(),text:l.text,why:"Prima del ripristino"}).slice(-15);
+   $("ta").value=x.text;await LessonManager.save();Sync.soon();backToEditor();
+  }));
+  c.appendChild(r);
+ });
+ c.appendChild(mkBtn("Torna agli appunti",backToEditor,1));
+}
+
 const Subj={
  get(){try{return JSON.parse(localStorage.getItem("ln_subj"))||["Meccanica e Meccatronica","Sistemi e Automazione","Tecnologie Meccaniche","Matematica","Italiano","Inglese"]}catch(e){return[]}},
  set(a){try{localStorage.setItem("ln_subj",JSON.stringify(a))}catch(e){}},
@@ -446,10 +658,11 @@ async function init(){
   $("bExp").onclick=async()=>{await LessonManager.save();DocumentManager.export(LessonManager.cur)};
   $("bL").onclick=()=>Speech.start();$("bS").onclick=()=>Speech.stop();
   $("fs").oninput=e=>$("ta").style.fontSize=e.target.value+"px";
+  $("bOrg").onclick=organize;$("bVer").onclick=showVersions;
   $("bInfo").onclick=()=>alert("Stato reale di questa versione:\n• Salvataggio: locale (IndexedDB), automatico.\n• Word: export .docx funzionante (serve Internet per caricare la libreria).\n• Google Drive / Dropbox: NON ancora collegati (servono client ID OAuth che solo tu puoi creare).\n• iCloud Drive: nessuna API per web app; usa «Esporta Word» e salva nell'app File.\n• Safari può sospendere il riconoscimento vocale: l'app lo riavvia ma non può garantire l'ascolto continuo in background.");
   const ta=$("ta");
-  ta.addEventListener("input",()=>{LessonManager.dirty();SuggestionEngine.refresh()});
-  ta.addEventListener("click",()=>SuggestionEngine.refresh());
+  ta.addEventListener("input",()=>{LessonManager.dirty();SuggestionEngine.refresh();Dash.soon()});
+  ta.addEventListener("click",()=>{SuggestionEngine.refresh();Dash.soon()});
   ta.addEventListener("keydown",e=>{
     if(e.ctrlKey&&e.code==="Space"){e.preventDefault();SuggestionEngine.refresh()}
     else if(e.key==="ArrowRight"&&SuggestionEngine.list.length&&ta.selectionStart===ta.selectionEnd&&ta.selectionEnd===ta.value.length){e.preventDefault();SuggestionEngine.accept(0)}
