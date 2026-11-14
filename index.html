@@ -48,7 +48,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 
 <section id="start" class="card">
  <h2 style="margin:0">Nuova lezione</h2>
- <label>Materia<select id="subj"><option>Meccanica e Meccatronica</option><option>Sistemi e Automazione</option><option>Tecnologie Meccaniche</option><option>Matematica</option><option>Italiano</option><option>Inglese</option><option>Altro</option></select></label>
+ <label>Materia<input id="subj" placeholder="Scrivi la materia o toccane una" maxlength="40" autocomplete="off"></label><div id="sj" style="display:flex;flex-wrap:wrap;gap:6px"></div>
  <label>Data<input type="date" id="dt"></label>
  <label>Ora<input type="time" id="tm"></label>
  <label>Titolo / Argomento<input id="topic" placeholder="Es. Moto rettilineo uniformemente accelerato"></label>
@@ -408,12 +408,26 @@ async function renderArchive(){
   };
   q.oninput=draw;draw();
 }
+const Subj={
+ get(){try{return JSON.parse(localStorage.getItem("ln_subj"))||["Meccanica e Meccatronica","Sistemi e Automazione","Tecnologie Meccaniche","Matematica","Italiano","Inglese"]}catch(e){return[]}},
+ set(a){try{localStorage.setItem("ln_subj",JSON.stringify(a))}catch(e){}},
+ add(n){const a=this.get();if(n&&!a.includes(n)){a.push(n);this.set(a)}},
+ render(){const box=$("sj");box.textContent="";
+  this.get().forEach(n=>{const w=document.createElement("span");w.style.display="inline-flex";
+   const b=document.createElement("button");b.className="chip";b.textContent=n;b.onclick=()=>{$("subj").value=n};
+   const x=document.createElement("button");x.className="chip";x.textContent="×";x.setAttribute("aria-label","Rimuovi "+n);
+   x.onclick=()=>{this.set(this.get().filter(t=>t!==n));this.render()};
+   w.append(b,x);box.appendChild(w)});
+ }
+};
 async function init(){
+  Subj.render();
   const n=new Date();$("dt").value=n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate());$("tm").value=pad(n.getHours())+":"+pad(n.getMinutes());
   try{await LocalDatabase.open()}catch(e){$("sv").textContent="IndexedDB non disponibile: gli appunti NON verranno salvati!"}
   try{const all=(await LocalDatabase.all())||[];if(all.length){all.sort((a,b)=>b.modified-a.modified);$("bLast").classList.remove("hide");$("bLast").onclick=()=>openLesson(all[0])}}catch(e){}
   $("bGo").onclick=async()=>{
-    const l=LessonManager.create($("subj").value,$("dt").value,$("tm").value,$("topic").value.trim());
+    const sb=$("subj").value.trim()||"Altro";Subj.add(sb);Subj.render();
+    const l=LessonManager.create(sb,$("dt").value,$("tm").value,$("topic").value.trim());
     LessonManager.cur=l;try{await LocalDatabase.put(l)}catch(e){}openLesson(l);
   };
   $("bArch").onclick=renderArchive;
