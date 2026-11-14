@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live Notes</title>
+<style>
+:root{--bg:#f5f5f7;--sf:#fff;--tx:#1d1d1f;--mu:#6e6e73;--ac:#0071e3;--bd:#d2d2d7;--ok:#248a3d;--er:#d70015;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--sf:#1c1c1e;--tx:#f5f5f7;--mu:#98989d;--bd:#38383a;--ac:#0a84ff;--ok:#30d158;--er:#ff453a}}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:16px -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;background-color:var(--bg)}
+#app{height:100%;display:flex;flex-direction:column}
+header{display:flex;gap:10px;align-items:center;padding:8px 14px;background:var(--sf);border-bottom:1px solid var(--bd);flex-wrap:wrap}
+header h1{font-size:16px;margin:0;flex:1;min-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button,select,input{font:inherit;color:var(--tx)}
+button{border:1px solid var(--bd);background:var(--sf);border-radius:10px;padding:8px 14px;cursor:pointer}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--ac);outline-offset:1px}
+.st{font-size:13px;color:var(--mu)}
+.card{background:var(--sf);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:18px}
+#start{margin:auto;width:min(480px,92%);display:flex;flex-direction:column;gap:12px;overflow:auto;max-height:100%}
+#start label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu)}
+#start input,#start select{padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+.hide{display:none!important}
+#ed{flex:1;display:flex;min-height:0}
+#left{flex:65;display:flex;flex-direction:column;min-width:0;padding:10px;gap:8px}
+#right{flex:35;overflow:auto;padding:10px 10px 10px 0;display:flex;flex-direction:column;gap:10px}
+#sug{min-height:42px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{border-radius:999px;background:var(--sf);border:1px solid var(--bd);padding:6px 12px;font-size:14px}
+.chip.s{background:var(--ac);color:#fff;border-color:var(--ac)}
+#ta{flex:1;resize:none;border:1px solid var(--bd);border-radius:14px;padding:16px;background:var(--sf);color:var(--tx);line-height:1.6;font-size:18px;min-height:0}
+#chips{display:flex;flex-wrap:wrap;gap:6px}
+#arch,#cf{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px;background:var(--sf);border-radius:12px}
+.row div{min-width:0}
+@media(orientation:portrait){#ed{flex-direction:column}#right{padding:0 10px 10px;max-height:34%}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+ <h1 id="ttl">Live Notes</h1>
+ <span class="st" id="sv">—</span><span class="st" id="cl">Drive: non configurato</span><button id="bDrv">Drive</button>
+ <button id="bArch">Archivio</button>
+ <button id="bExp" class="hide">Esporta Word</button>
+ <button id="bInfo">Limiti</button>
+</header>
+
+<section id="start" class="card">
+ <h2 style="margin:0">Nuova lezione</h2>
+ <label>Materia<select id="subj"><option>Meccanica e Meccatronica</option><option>Sistemi e Automazione</option><option>Tecnologie Meccaniche</option><option>Matematica</option><option>Italiano</option><option>Inglese</option><option>Altro</option></select></label>
+ <label>Data<input type="date" id="dt"></label>
+ <label>Ora<input type="time" id="tm"></label>
+ <label>Titolo / Argomento<input id="topic" placeholder="Es. Moto rettilineo uniformemente accelerato"></label>
+ <button class="p" id="bGo">INIZIA A SCRIVERE</button>
+ <button id="bLast" class="hide">Riprendi ultima sessione</button>
+</section>
+
+<section id="arch" class="hide"></section>
+<section id="cf" class="hide"></section>
+<section id="drv" class="card hide" style="margin:auto;width:min(520px,92%);display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:100%">
+<h2 style="margin:0">Google Drive</h2>
+<label class="st">Client ID OAuth<input id="cid" placeholder="xxxx.apps.googleusercontent.com" style="width:100%;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg)"></label>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="p" id="dC">Connetti</button><button id="dS">Sincronizza ora</button><button id="dX">Scollega</button><button id="dB">Chiudi</button></div>
+<p class="st" id="dT"></p>
+<p class="st">Il token resta solo in memoria: dopo una ricarica o circa un'ora tocca di nuovo Connetti. I file vanno in Drive/Live Notes/Materia/Anno/Lezioni come .docx. L'app vede solo i file che ha creato (permesso drive.file). Eliminare una lezione qui non la cancella da Drive.</p>
+</section>
+
+<section id="ed" class="hide">
+ <div id="left">
+  <div id="sug" aria-live="polite"></div>
+  <textarea id="ta" placeholder="Scrivi qui i tuoi appunti…" spellcheck="false" autocapitalize="sentences"></textarea>
+  <div class="st">Ctrl+Spazio suggerimenti · → accetta · Esc chiude · Ctrl+S salva · <label>Carattere <input type="range" id="fs" min="14" max="30" value="18"></label></div>
+ </div>
+ <aside id="right">
+  <div class="card">
+   <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="p" id="bL">Avvia ascolto</button><button id="bS" disabled>Interrompi</button>
+   </div>
+   <p class="st" id="mic">Microfono spento</p>
+   <p class="st">Parole degli ultimi 60 s (non salvate negli appunti):</p>
+   <div id="chips"></div>
+  </div>
+ </aside>
+</section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+
+/* ---------- LocalDatabase (IndexedDB) ---------- */
+const LocalDatabase={
+ db:null,
+ open(){return new Promise((res,rej)=>{
+  let r;try{r=indexedDB.open("livenotes",1)}catch(e){return rej(e)}
+  r.onupgradeneeded=()=>r.result.createObjectStore("lessons",{keyPath:"id"});
+  r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error);
+ })},
+ tx(m,fn){return new Promise((res,rej)=>{const t=this.db.transaction("lessons",m);const q=fn(t.objectStore("lessons"));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)})},
+ put(l){return this.tx("readwrite",s=>s.put(l))},
+ all(){return this.tx("readonly",s=>s.getAll())},
+ del(id){return this.tx("readwrite",s=>s.delete(id))}
+};
+
+/* ---------- LessonManager ---------- */
+const LessonManager={
+ cur:null,
+ create(subject,date,time,topic){
+  return {id:crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2),
+   subject,date,time,topic:topic||"Senza titolo",text:"",version:1,created:Date.now(),modified:Date.now(),sync:"local"};
+ },
+ async save(){
+  if(!this.cur)return;
+  if($("ta").value===this.cur.text){$("sv").textContent="Salvato in locale";return}
+  this.cur.text=$("ta").value;this.cur.modified=Date.now();this.cur.version++;if(this.cur.sync==="synced")this.cur.sync="pending";
+  try{await LocalDatabase.put(this.cur);$("sv").textContent="Salvato in locale "+new Date().toLocaleTimeString("it-IT")}
+  catch(e){$("sv").textContent="Errore salvataggio locale!"}
+ }
+};
+
+/* ---------- RollingMemory ---------- */
+const STOP=new Set("che non per una con del della dei delle degli nel nella sono come più anche gli alle allo dal dalla questo questa quello essere ho ha hanno poi quindi ecco cioè però ma se si lo le la il un in di da al a e i o è mi ti ci vi sul sulla suo sua loro dunque allora molto quando dove perché".split(" "));
+const RollingMemory={
+ items:[],
+ add(text){
+  const now=Date.now();
+  text.toLowerCase().split(/[^\p{L}\p{N}'’-]+/u).forEach(w=>{
+   w=w.replace(/^['’-]+|['’-]+$/g,"");
+   if(w.length>=3&&!STOP.has(w)&&!/^\d+$/.test(w))this.items.push({w,t:now});
+  });
+ },
+ prune(){const c=Date.now()-60000;this.items=this.items.filter(i=>i.t>=c)},
+ stats(){
+  this.prune();const m=new Map();
+  for(const i of this.items){const e=m.get(i.w)||{w:i.w,n:0,t:0};e.n++;e.t=Math.max(e.t,i.t);m.set(i.w,e)}
+  return [...m.values()].sort((a,b)=>b.n-a.n||b.t-a.t);
+ }
+};
+
+/* ---------- NotesEditor + SuggestionEngine ---------- */
+const NotesEditor={
+ insert(word,replaceLen){
+  const ta=$("ta");let s=ta.selectionStart,e=ta.selectionEnd;
+  if(replaceLen)s=e-replaceLen;
+  ta.setRangeText(word,s,e,"end");
+  ta.focus({preventScroll:true});
+  LessonManager.dirty();
+ },
+ lastWord(){
+  const ta=$("ta");if(ta.selectionStart!==ta.selectionEnd)return"";
+  const m=ta.value.slice(0,ta.selectionStart).match(/[\p{L}\p{N}'’-]+$/u);
+  return m?m[0]:"";
+ }
+};
+const SuggestionEngine={
+ list:[],
+ refresh(){
+  const p=NotesEditor.lastWord().toLowerCase();
+  const box=$("sug");box.textContent="";
+  this.list=p.length<2?[]:RollingMemory.stats().filter(x=>x.w.startsWith(p)&&x.w!==p).slice(0,5);
+  this.list.forEach((x,i)=>{
+   const b=document.createElement("button");b.className="chip"+(i?"":" s");b.textContent=x.w;
+   b.onmousedown=ev=>ev.preventDefault();
+   b.onclick=()=>this.accept(i);box.appendChild(b);
+  });
+ },
+ accept(i){
+  const x=this.list[i];if(!x)return;
+  NotesEditor.insert(x.w+" ",NotesEditor.lastWord().length);this.refresh();
+ }
+};
+
+/* ---------- SpeechRecognitionManager ---------- */
+const Speech={
+ rec:null,want:false,running:false,fails:0,
+ start(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){$("mic").textContent="Riconoscimento vocale non supportato da questo browser.";return}
+  this.want=true;$("bL").disabled=true;$("bS").disabled=false;this.spawn(SR);
+ },
+ spawn(SR){
+  if(this.running||!this.want)return;
+  const r=this.rec=new SR();r.lang="it-IT";r.continuous=true;r.interimResults=true;
+  r.onstart=()=>{this.running=true;$("mic").textContent="In ascolto…"};
+  r.onresult=ev=>{
+   this.fails=0;
+   for(let i=ev.resultIndex;i<ev.results.length;i++)
+    if(ev.results[i].isFinal)RollingMemory.add(ev.results[i][0].transcript);
+   Dash.render();SuggestionEngine.refresh();
+  };
+  r.onerror=ev=>{
+   if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){this.want=false;$("mic").textContent="Permesso microfono negato.";this.ui()}
+   else if(ev.error!=="no-speech")this.fails++;
+  };
+  r.onend=()=>{
+   this.running=false;
+   if(!this.want){$("mic").textContent="Microfono spento";return}
+   $("mic").textContent="Riavvio ascolto…";
+   setTimeout(()=>this.spawn(SR),Math.min(500*(2**this.fails),8000));
+  };
+  try{r.start()}catch(e){this.running=false}
+ },
+ stop(){this.want=false;try{this.rec&&this.rec.stop()}catch(e){}this.ui();$("mic").textContent="Microfono spento"},
+ ui(){$("bL").disabled=false;$("bS").disabled=true}
+};
+const Dash={
+ render(){
+  const box=$("chips");box.textContent="";
+  RollingMemory.stats().slice(0,30).forEach(x=>{
+   const b=document.createElement("button");b.className="chip";b.textContent=x.w+(x.n>1?" ×"+x.n:"");
+   b.onmousedown=ev=>ev.preventDefault();
+   b.onclick=()=>NotesEditor.insert(x.w);
+   box.appendChild(b);
+  });
+ }
+};
+
+/* ---------- DocumentManager (.docx) ---------- */
+const DocumentManager={
+ async build(l){
+  if(!window.docx)throw new Error("Libreria Word non caricata: serve Internet");
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType}=window.docx;
+  const meta=(k,v)=>new Paragraph({spacing:{after:60},children:[new TextRun({text:k+": ",bold:true,font:"Calibri",size:24}),new TextRun({text:v,font:"Calibri",size:24})]});
+  const body=l.text.split("\n").map(t=>new Paragraph({spacing:{after:120,line:300},children:[new TextRun({text:t,font:"Calibri",size:24})]}));
+  const d=new Document({sections:[{children:[
+   new Paragraph({children:[new TextRun({text:"LIVE NOTES",font:"Calibri",size:22,color:"6E6E73"})]}),
+   new Paragraph({heading:HeadingLevel.HEADING_1,spacing:{after:200},children:[new TextRun({text:l.topic.toUpperCase(),font:"Calibri",bold:true})]}),
+   meta("Materia",l.subject),meta("Data",new Date(l.date+"T00:00").toLocaleDateString("it-IT",{day:"numeric",month:"long",year:"numeric"})),meta("Ora",l.time),
+   new Paragraph({heading:HeadingLevel.HEADING_2,spacing:{before:300,after:160},children:[new TextRun({text:"APPUNTI",font:"Calibri"})]}),
+   ...body]}]});
+  return Packer.toBlob(d);
+ },
+ fname(l){return (l.date+" "+l.time.replace(":","-")+" "+l.topic).replace(/[\\/:*?"<>|]/g,"_")+".docx"},
+ async export(l){
+  let blob;try{blob=await this.build(l)}catch(e){alert(e.message);return}
+  const name=this.fname(l);
+  const file=new File([blob],name,{type:blob.type});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return}}catch(e){if(e.name==="AbortError")return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
+ }
+};
+
+/* ---------- GoogleDriveProvider ---------- */
+const MIME="application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const GD={
+ tok:null,fc:new Map(),
+ cid(){try{return localStorage.getItem("ln_cid")||""}catch(e){return""}},
+ loadGIS(){return new Promise((res,rej)=>{if(window.google&&google.accounts)return res();const s=document.createElement("script");s.src="https://accounts.google.com/gsi/client";s.onload=res;s.onerror=()=>rej(new Error("Google Identity Services non raggiungibile"));document.head.appendChild(s)})},
+ connect(){
+  if(!(window.google&&google.accounts)){this.loadGIS().catch(()=>{});throw new Error("Libreria Google in caricamento: riprova tra un istante")}
+  return new Promise((res,rej)=>{
+   google.accounts.oauth2.initTokenClient({client_id:this.cid(),scope:"https://www.googleapis.com/auth/drive.file",
+    callback:r=>{if(r.error)return rej(new Error(r.error));this.tok=r.access_token;setTimeout(()=>{this.tok=null;Sync.ui()},(r.expires_in-60)*1000);Sync.ui();res()},
+    error_callback:e=>rej(new Error(e.type||"autorizzazione annullata"))}).requestAccessToken();
+  });
+ },
+ async api(url,opt={}){
+  if(!this.tok)throw Object.assign(new Error("Non connesso a Drive"),{auth:1});
+  const r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+this.tok}});
+  if(r.status===401){this.tok=null;throw Object.assign(new Error("Sessione Drive scaduta"),{auth:1})}
+  if(!r.ok)throw new Error("Drive "+r.status+": "+(await r.text()).slice(0,100));
+  return r;
+ },
+ async folder(path){
+  const key=path.join("/");if(this.fc.has(key))return this.fc.get(key);
+  let p="root";
+  for(const n of path){
+   const q=encodeURIComponent(`name='${n.replace(/'/g,"\\'")}' and '${p}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+   const j=await(await this.api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`)).json();
+   if(j.files.length){p=j.files[0].id;continue}
+   p=(await(await this.api("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n,mimeType:"application/vnd.google-apps.folder",parents:[p]})})).json()).id;
+  }
+  this.fc.set(key,p);return p;
+ },
+ async upload(id,meta,blob){
+  const b="lnb"+Date.now();
+  const body=new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${MIME}\r\n\r\n`,blob,`\r\n--${b}--`]);
+  return (await this.api("https://www.googleapis.com/upload/drive/v3/files"+(id?"/"+id:"")+"?uploadType=multipart&fields=id,md5Checksum",{method:id?"PATCH":"POST",headers:{"Content-Type":"multipart/related; boundary="+b},body})).json();
+ },
+ async meta(id){return (await this.api(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,md5Checksum,trashed`)).json()},
+ async get(id){return (await this.api(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)).arrayBuffer()},
+ async list(){const q=encodeURIComponent("appProperties has { key='ln' and value='1' } and trashed=false");
+  return (await(await this.api(`https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=200&fields=files(id,appProperties)`)).json()).files}
+};
+
+/* ---------- CloudSyncManager ---------- */
+const Sync={
+ busy:false,last:null,tm:null,
+ set(t){$("cl").textContent=t;$("dT").textContent=t},
+ ui(){this.set(!GD.cid()?"Drive: non configurato":!GD.tok?"Drive: non connesso":"Drive: connesso"+(this.last?" · ultima sync "+this.last.toLocaleTimeString("it-IT"):""))},
+ soon(){clearTimeout(this.tm);this.tm=setTimeout(()=>this.all(),1500)},
+ tombs(){try{return JSON.parse(localStorage.getItem("ln_del")||"[]")}catch(e){return[]}},
+ tomb(id){try{const t=this.tombs();t.push(id);localStorage.setItem("ln_del",JSON.stringify(t))}catch(e){}},
+ async hash(t){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")},
+ props(l){return{name:DocumentManager.fname(l),appProperties:{ln:"1",lid:l.id,subj:l.subject.slice(0,40),d:l.date,t:l.time,top:l.topic.slice(0,45)}}},
+ async push(l){
+  const text=l.text,blob=await DocumentManager.build(l),m=this.props(l);
+  if(!l.remoteId)m.parents=[await GD.folder(["Live Notes",l.subject,l.date.slice(0,4),"Lezioni"])];
+  const r=await GD.upload(l.remoteId,m,blob);
+  l.remoteId=r.id;l.remoteMd5=r.md5Checksum;l.baseHash=await this.hash(text);l.sync=text===l.text?"synced":"pending";
+ },
+ async read(id){
+  const v=(await mammoth.extractRawText({arrayBuffer:await GD.get(id)})).value;
+  const m=v.match(/\n\nAPPUNTI(?:\n\n|$)/);
+  if(!m)throw new Error("Struttura del documento Drive non riconosciuta: non importato");
+  return v.slice(m.index+m[0].length).replace(/\n\n/g,"\n");
+ },
+ async one(l,cur){
+  let m;
+  if(l.remoteId){try{m=await GD.meta(l.remoteId)}catch(e){if(!/Drive 404/.test(e.message))throw e}}
+  if(!m||m.trashed){l.remoteId=null;await this.push(l);return}
+  const lc=(await this.hash(l.text))!==l.baseHash,rc=m.md5Checksum!==l.remoteMd5;
+  if(!lc&&!rc){l.sync="synced";return}
+  if(lc&&!rc){await this.push(l);return}
+  const txt=await this.read(l.remoteId);
+  if(cur===l&&$("ta").value!==l.text)return;
+  if(txt===l.text){l.remoteMd5=m.md5Checksum;l.baseHash=await this.hash(txt);l.sync="synced";return}
+  if(!lc){l.prev=l.text;l.text=txt;l.remoteMd5=m.md5Checksum;l.baseHash=await this.hash(txt);l.sync="synced";l.modified=Date.now();return"pulled"}
+  l.conflict={text:txt,md5:m.md5Checksum};l.sync="conflict";
+ },
+ async all(){
+  if(this.busy)return;
+  if(!GD.tok){this.ui();return}
+  if(!navigator.onLine){this.set("Sincronizzazione in sospeso (offline)");return}
+  this.busy=true;this.set("Sincronizzazione in corso…");
+  let conf=0,err="";
+  try{
+   const cur=LessonManager.cur;if(cur)await LessonManager.save();
+   const ls=(await LocalDatabase.all())||[],dels=this.tombs(),have=new Set(ls.map(l=>l.id));
+   for(const f of await GD.list()){const a=f.appProperties||{};
+    if(a.lid&&!have.has(a.lid)&&!dels.includes(a.lid)){const n=LessonManager.create(a.subj,a.d,a.t,a.top);n.id=a.lid;n.remoteId=f.id;n.baseHash=await this.hash("");n.sync="pending";ls.push(n)}}
+   for(let l of ls){
+    if(cur&&l.id===cur.id)l=cur;
+    if(dels.includes(l.id))continue;
+    try{
+     const r=await this.one(l,cur);
+     if(r==="pulled"&&l===cur){const p=Math.min($("ta").selectionStart,l.text.length);$("ta").value=l.text;$("ta").setSelectionRange(p,p)}
+    }catch(e){if(e.auth)throw e;err=e.message;if(l.sync==="synced")l.sync="pending"}
+    if(l.sync==="conflict")conf++;
+    await LocalDatabase.put(l);
+   }
+   this.last=new Date();
+   this.ui();if(conf)this.set("Conflitto tra versioni ("+conf+"): apri l'Archivio");else if(err)this.set("Errore sync: "+err);
+  }catch(e){
+   if(e.auth)this.set("Sessione Drive scaduta: Drive → Connetti");else this.set("Errore sync: "+e.message);
+  }finally{this.busy=false}
+ }
+};
+
+/* ---------- ConflictResolver ---------- */
+function showConflict(l){
+ show("cf");const c=$("cf");c.textContent="";
+ const h=document.createElement("h2");h.style.margin="0";h.textContent="Conflitto: «"+l.topic+"»";
+ const p=document.createElement("p");p.className="st";p.textContent="Hai modificato gli appunti sia qui sia su Drive. Nessuna versione è stata sovrascritta: quella che non scegli resta salvata come copia locale.";
+ const g=document.createElement("div");g.style.cssText="display:flex;gap:10px;flex:1;min-height:200px";
+ const mk=(t,tx)=>{const d=document.createElement("div");d.style.cssText="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0";const s=document.createElement("strong");s.textContent=t;const a=document.createElement("textarea");a.readOnly=true;a.value=tx;a.style.cssText="flex:1;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--sf);color:var(--tx)";d.append(s,a);return d};
+ g.append(mk("Questa app",l.text),mk("Google Drive",l.conflict.text));
+ const bar=document.createElement("div");bar.style.cssText="display:flex;gap:8px;flex-wrap:wrap";
+ const b=(t,f,pr)=>{const x=document.createElement("button");x.textContent=t;if(pr)x.className="p";x.onclick=f;bar.appendChild(x)};
+ b("Mantieni la mia versione",()=>resolveConflict(l,true),1);b("Usa la versione di Drive",()=>resolveConflict(l,false));b("Decidi dopo",renderArchive);
+ c.append(h,p,g,bar);
+}
+async function resolveConflict(l,keep){
+ const c=l.conflict,cp=LessonManager.create(l.subject,l.date,l.time,l.topic+(keep?" (copia Drive)":" (copia locale)"));
+ cp.text=keep?c.text:l.text;await LocalDatabase.put(cp);
+ l.remoteMd5=c.md5;
+ if(keep)l.sync="pending";else{l.text=c.text;l.baseHash=await Sync.hash(c.text);l.sync="synced"}
+ delete l.conflict;l.modified=Date.now();await LocalDatabase.put(l);
+ renderArchive();Sync.all();
+}
+
+/* ---------- AppController ---------- */
+let saveT=null;
+LessonManager.dirty=function(){
+  $("sv").textContent="Modifiche non salvate…";clearTimeout(saveT);saveT=setTimeout(async()=>{await LessonManager.save();Sync.soon()},600);
+};
+function show(v){["start","arch","ed","cf","drv"].forEach(k=>$(k).classList.toggle("hide",k!==v));$("bExp").classList.toggle("hide",v!=="ed")}
+function openLesson(l){
+  LessonManager.cur=l;$("ta").value=l.text;$("ttl").textContent=l.topic+" · "+l.subject;show("ed");$("ta").focus();
+}
+async function renderArchive(){
+  await LessonManager.save();LessonManager.cur=null;show("arch");const box=$("arch");box.textContent="";
+  const top=document.createElement("div");top.className="row";
+  const nb=document.createElement("button");nb.textContent="+ Nuova lezione";nb.onclick=()=>{show("start")};
+  const q=document.createElement("input");q.placeholder="Cerca per titolo";q.style.cssText="flex:1;padding:8px;border:1px solid var(--bd);border-radius:10px;background:var(--bg)";
+  top.append(nb,q);box.appendChild(top);
+  const list=document.createElement("div");list.style.cssText="display:flex;flex-direction:column;gap:8px";box.appendChild(list);
+  const all=((await LocalDatabase.all())||[]).sort((a,b)=>b.modified-a.modified);
+  const draw=()=>{
+   list.textContent="";
+   all.filter(l=>l.topic.toLowerCase().includes(q.value.toLowerCase())).forEach(l=>{
+    const r=document.createElement("div");r.className="row";
+    const d=document.createElement("div");
+    const t=document.createElement("strong");t.textContent=l.topic;
+    const s=document.createElement("div");s.className="st";s.textContent=l.subject+" · "+l.date+" "+l.time+" · modif. "+new Date(l.modified).toLocaleString("it-IT")+" · "+({synced:"su Drive",pending:"in attesa di sync",conflict:"CONFLITTO"}[l.sync]||"solo locale");
+    d.append(t,s);
+    const bs=document.createElement("div");bs.style.cssText="display:flex;gap:6px";
+    const o=document.createElement("button");o.textContent="Apri";o.onclick=()=>l.sync==="conflict"?showConflict(l):openLesson(l);
+    const e=document.createElement("button");e.textContent="Word";e.onclick=()=>DocumentManager.export(l);
+    const x=document.createElement("button");x.textContent="Elimina";x.onclick=async()=>{if(confirm("Eliminare «"+l.topic+"»?")){await LocalDatabase.del(l.id);Sync.tomb(l.id);all.splice(all.indexOf(l),1);draw()}};
+    bs.append(o,e,x);r.append(d,bs);list.appendChild(r);
+   });
+   if(!list.children.length){const p=document.createElement("p");p.className="st";p.textContent="Nessuna lezione.";list.appendChild(p)}
+  };
+  q.oninput=draw;draw();
+}
+async function init(){
+  const n=new Date();$("dt").value=n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate());$("tm").value=pad(n.getHours())+":"+pad(n.getMinutes());
+  try{await LocalDatabase.open()}catch(e){$("sv").textContent="IndexedDB non disponibile: gli appunti NON verranno salvati!"}
+  try{const all=(await LocalDatabase.all())||[];if(all.length){all.sort((a,b)=>b.modified-a.modified);$("bLast").classList.remove("hide");$("bLast").onclick=()=>openLesson(all[0])}}catch(e){}
+  $("bGo").onclick=async()=>{
+    const l=LessonManager.create($("subj").value,$("dt").value,$("tm").value,$("topic").value.trim());
+    LessonManager.cur=l;try{await LocalDatabase.put(l)}catch(e){}openLesson(l);
+  };
+  $("bArch").onclick=renderArchive;
+  $("bDrv").onclick=()=>{$("cid").value=GD.cid();Sync.ui();show("drv")};
+  $("dB").onclick=()=>show(LessonManager.cur?"ed":"start");
+  $("dC").onclick=()=>{const v=$("cid").value.trim();
+   if(!/\.apps\.googleusercontent\.com$/.test(v)){$("dT").textContent="Il Client ID deve finire con .apps.googleusercontent.com";return}
+   try{localStorage.setItem("ln_cid",v)}catch(e){}
+   try{GD.connect().then(()=>Sync.all()).catch(e=>{$("dT").textContent="Errore: "+e.message})}catch(e){$("dT").textContent=e.message}};
+  $("dS").onclick=()=>Sync.all();
+  $("dX").onclick=()=>{if(GD.tok&&window.google)google.accounts.oauth2.revoke(GD.tok);GD.tok=null;Sync.ui()};
+  if(GD.cid()){GD.loadGIS().catch(()=>{});Sync.ui()}
+  window.addEventListener("online",()=>Sync.all());
+  setInterval(()=>Sync.all(),60000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)Sync.all()});
+  $("bExp").onclick=async()=>{await LessonManager.save();DocumentManager.export(LessonManager.cur)};
+  $("bL").onclick=()=>Speech.start();$("bS").onclick=()=>Speech.stop();
+  $("fs").oninput=e=>$("ta").style.fontSize=e.target.value+"px";
+  $("bInfo").onclick=()=>alert("Stato reale di questa versione:\n• Salvataggio: locale (IndexedDB), automatico.\n• Word: export .docx funzionante (serve Internet per caricare la libreria).\n• Google Drive / Dropbox: NON ancora collegati (servono client ID OAuth che solo tu puoi creare).\n• iCloud Drive: nessuna API per web app; usa «Esporta Word» e salva nell'app File.\n• Safari può sospendere il riconoscimento vocale: l'app lo riavvia ma non può garantire l'ascolto continuo in background.");
+  const ta=$("ta");
+  ta.addEventListener("input",()=>{LessonManager.dirty();SuggestionEngine.refresh()});
+  ta.addEventListener("click",()=>SuggestionEngine.refresh());
+  ta.addEventListener("keydown",e=>{
+    if(e.ctrlKey&&e.code==="Space"){e.preventDefault();SuggestionEngine.refresh()}
+    else if(e.key==="ArrowRight"&&SuggestionEngine.list.length&&ta.selectionStart===ta.selectionEnd&&ta.selectionEnd===ta.value.length){e.preventDefault();SuggestionEngine.accept(0)}
+    else if(e.key==="Escape"){SuggestionEngine.list=[];$("sug").textContent=""}
+    else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){e.preventDefault();LessonManager.save()}
+  });
+  setInterval(()=>{if(!$("ed").classList.contains("hide")){Dash.render();SuggestionEngine.refresh()}},3000);
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)LessonManager.save()});
+  window.addEventListener("pagehide",()=>LessonManager.save());
+  show("start");
+}
+init();
+</script>
+</body>
+</html>
